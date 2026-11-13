@@ -1,0 +1,17 @@
+# Keep generated Android binaries and local secrets OUT of this public repo.
+*.apk
+*.aab
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.env
+.env.*
+*.log
+.gradle/
+build/
+local.properties
+unsigned-candidates/
+signed-output/

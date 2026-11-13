@@ -1,0 +1,143 @@
+name: Trialum Android - unsigned builds
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: "Full 40-character commit SHA already PUBLIC in this repository"
+        required: true
+        type: string
+      public_source_ack:
+        description: "I confirm this source is authorized to remain PUBLIC"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trialum-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-policy:
+    name: build-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout build infrastructure
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check Android-only CI and local-signing boundary
+        run: python3 tools/verify_build_repo.py
+
+  unsigned-apks:
+    name: unsigned-apks
+    if: ${{ github.event_name == 'workflow_dispatch' && github.actor == 'extreme4music-nexus' }}
+    needs: build-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Validate owner public-source acknowledgment and immutable commit
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_commit }}
+          SOURCE_ACK: ${{ inputs.public_source_ack }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Full 40-character public commit SHA required" >&2; exit 1;
+          }
+          [[ "$SOURCE_ACK" == "true" ]] || {
+            echo "Explicit public-source approval required" >&2; exit 1;
+          }
+
+      - name: Check out explicitly selected ALREADY PUBLIC source snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Validate source snapshot and provenance
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$(git -C candidate rev-parse HEAD)" == "$SOURCE_SHA" ]] || exit 1
+          test -f candidate/snapshot/android-template/settings.gradle.kts
+          test -f candidate/snapshot/tests/dialogue-session.test.cjs
+          test -d candidate/snapshot/android-template/app
+          test -f candidate/snapshot/index.html
+
+      - name: Set up Java 17
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.11.1 without dependency cache
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          gradle-version: "8.11.1"
+          cache-disabled: true
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Run source dialogue-session regression tests
+        working-directory: candidate/snapshot
+        run: node --test tests/dialogue-session.test.cjs
+
+      - name: Build Android release/SignQA/FriendsDebug unsigned candidates
+        run: gradle -p candidate/snapshot/android-template assembleRelease assembleSignqa assembleSigndebug --no-daemon
+
+      - name: Check package IDs and SHA-256; do NOT sign
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          test -x "$AAPT"
+          mkdir -p unsigned-candidates
+          verify_one() {
+            local name="$1" apk="$2" package="$3"
+            test -s "$apk"
+            local badging
+            badging=$("$AAPT" dump badging "$apk")
+            printf '%s\n' "$badging" | grep -Fq "package: name='$package'"
+            printf '%s\n' "$badging" | grep -m1 '^package:' > "unsigned-candidates/$name-package.txt"
+            cp "$apk" "unsigned-candidates/$name-unsigned.apk"
+          }
+          verify_one release candidate/snapshot/android-template/app/build/outputs/apk/release/app-release-unsigned.apk com.trialum.ziivaiskra
+          verify_one signqa candidate/snapshot/android-template/app/build/outputs/apk/signqa/app-signqa-unsigned.apk com.trialum.ziivaiskra.signqa
+          verify_one signdebug candidate/snapshot/android-template/app/build/outputs/apk/signdebug/app-signdebug-unsigned.apk com.trialum.ziivaiskra.signdebug
+          (cd unsigned-candidates && sha256sum *-unsigned.apk > SHA256SUMS)
+          {
+            echo "selected_source_commit=$SOURCE_SHA"
+            echo "android_sdk=36"
+            echo "status=UNSIGNED_ANDROID_CANDIDATES_FOR_LOCAL_OWNER_SIGNING_ONLY"
+            echo "signing=LOCAL_ONLY_NO_KEY_ON_GITHUB"
+          } > unsigned-candidates/build-info.txt
+
+      - name: Upload unsigned APKs for LOCAL signing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Trialum-unsigned-Android-${{ github.run_number }}
+          path: unsigned-candidates/
+          if-no-files-found: error
+          retention-days: 14
