@@ -82,6 +82,9 @@ jobs:
           printf 'source_commit=%s\n' "$GITHUB_SHA" > unsigned-candidates/build-info.txt
           printf 'version_code=35\n' >> unsigned-candidates/build-info.txt
           printf 'status=UNSIGNED_INTERNAL_QA_CANDIDATES_NOT_FOR_PUBLIC_RELEASE\n' >> unsigned-candidates/build-info.txt
+          printf 'pgs_project_id=330148794383\n' >> unsigned-candidates/build-info.txt
+          printf 'pgs_achievements=first_pet,first_plant,learned,advanced,ecology,lab6,dna\n' >> unsigned-candidates/build-info.txt
+          printf 'pgs_leaderboards=xp,species\n' >> unsigned-candidates/build-info.txt
 
       - name: Upload unsigned candidates for local owner signing
         uses: actions/upload-artifact@v4
