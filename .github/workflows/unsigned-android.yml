@@ -43,8 +43,21 @@ jobs:
         working-directory: snapshot
         run: node --test tests/dialogue-session.test.cjs
 
-      - name: Build three unsigned APK candidates
-        run: gradle -p snapshot/android-template assembleRelease assembleSignqa assembleSigndebug --no-daemon
+      - name: Build three unsigned APK candidates with Play Games draft IDs
+        run: |
+          args=(
+            "-PtrialumPgsProjectId=330148794383"
+            "-PtrialumPgsAchievement_first_pet=CgkIj6Cb880JEAIQAg"
+            "-PtrialumPgsAchievement_first_plant=CgkIj6Cb880JEAIQAw"
+            "-PtrialumPgsAchievement_learned=CgkIj6Cb880JEAIQBA"
+            "-PtrialumPgsAchievement_advanced=CgkIj6Cb880JEAIQBQ"
+            "-PtrialumPgsAchievement_ecology=CgkIj6Cb880JEAIQBg"
+            "-PtrialumPgsAchievement_lab6=CgkIj6Cb880JEAIQBw"
+            "-PtrialumPgsAchievement_dna=CgkIj6Cb880JEAIQCA"
+            "-PtrialumPgsLeaderboard_xp=CgkIj6Cb880JEAIQCQ"
+            "-PtrialumPgsLeaderboard_species=CgkIj6Cb880JEAIQCg"
+          )
+          gradle -p snapshot/android-template assembleRelease assembleSignqa assembleSigndebug --no-daemon "${args[@]}"
 
       - name: Verify package IDs and version, then prepare unsigned candidates
         shell: bash
