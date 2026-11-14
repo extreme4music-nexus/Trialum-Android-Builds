@@ -1,0 +1,95 @@
+name: Trialum unsigned Android QA build
+
+on:
+  push:
+    branches:
+      - ci/lw-c-android-unsigned-20261113
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unsigned-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out this build snapshot
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Install Android SDK 36
+        run: |
+          SDKMANAGER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Run LW-C dialogue session tests
+        working-directory: snapshot
+        run: node --test tests/dialogue-session.test.cjs
+
+      - name: Build three unsigned APK candidates with Play Games draft IDs
+        run: |
+          args=(
+            "-PtrialumPgsProjectId=330148794383"
+            "-PtrialumPgsAchievement_first_pet=CgkIj6Cb880JEAIQAg"
+            "-PtrialumPgsAchievement_first_plant=CgkIj6Cb880JEAIQAw"
+            "-PtrialumPgsAchievement_learned=CgkIj6Cb880JEAIQBA"
+            "-PtrialumPgsAchievement_advanced=CgkIj6Cb880JEAIQBQ"
+            "-PtrialumPgsAchievement_ecology=CgkIj6Cb880JEAIQBg"
+            "-PtrialumPgsAchievement_lab6=CgkIj6Cb880JEAIQBw"
+            "-PtrialumPgsAchievement_dna=CgkIj6Cb880JEAIQCA"
+            "-PtrialumPgsLeaderboard_xp=CgkIj6Cb880JEAIQCQ"
+            "-PtrialumPgsLeaderboard_species=CgkIj6Cb880JEAIQCg"
+          )
+          gradle -p snapshot/android-template assembleRelease assembleSignqa assembleSigndebug --no-daemon "${args[@]}"
+
+      - name: Verify package IDs and version, then prepare unsigned candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          mkdir -p unsigned-candidates
+          verify_one() {
+            local variant="$1" apk="$2" package="$3" version="$4"
+            test -s "$apk"
+            local badging
+            badging=$("$AAPT" dump badging "$apk")
+            printf '%s\n' "$badging" | grep -Fq "package: name='$package'"
+            printf '%s\n' "$badging" | grep -Fq "versionCode='35'"
+            printf '%s\n' "$badging" | grep -Fq "versionName='$version'"
+            cp "$apk" "unsigned-candidates/$variant-unsigned.apk"
+          }
+          verify_one release snapshot/android-template/app/build/outputs/apk/release/app-release-unsigned.apk com.trialum.ziivaiskra 1.6-LW-dev.12
+          verify_one signqa snapshot/android-template/app/build/outputs/apk/signqa/app-signqa-unsigned.apk com.trialum.ziivaiskra.signqa 1.6-LW-dev.12-signqa
+          verify_one signdebug snapshot/android-template/app/build/outputs/apk/signdebug/app-signdebug-unsigned.apk com.trialum.ziivaiskra.signdebug 1.6-LW-dev.12-signdebug
+          sha256sum unsigned-candidates/*.apk > unsigned-candidates/SHA256SUMS
+          printf 'source_commit=%s\n' "$GITHUB_SHA" > unsigned-candidates/build-info.txt
+          printf 'version_code=35\n' >> unsigned-candidates/build-info.txt
+          printf 'status=UNSIGNED_INTERNAL_QA_CANDIDATES_NOT_FOR_PUBLIC_RELEASE\n' >> unsigned-candidates/build-info.txt
+          printf 'pgs_project_id=330148794383\n' >> unsigned-candidates/build-info.txt
+          printf 'pgs_achievements=first_pet,first_plant,learned,advanced,ecology,lab6,dna\n' >> unsigned-candidates/build-info.txt
+          printf 'pgs_leaderboards=xp,species\n' >> unsigned-candidates/build-info.txt
+
+      - name: Upload unsigned candidates for local owner signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: Trialum-1.6-LW-dev.12-unsigned-candidates
+          path: unsigned-candidates/
+          if-no-files-found: error
+          retention-days: 14
