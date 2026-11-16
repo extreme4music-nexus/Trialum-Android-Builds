@@ -101,6 +101,7 @@ jobs:
       - name: Run source dialogue-session regression tests
         working-directory: candidate/snapshot
         run: node --test tests/dialogue-session.test.cjs
+          node --test tests/lw-d-l3-9-original-plant-engine.test.cjs
 
       - name: Build Android release/SignQA/FriendsDebug unsigned candidates
         run: gradle -p candidate/snapshot/android-template assembleRelease assembleSignqa assembleSigndebug --no-daemon
