@@ -8,8 +8,7 @@
 
 ## Што прави
 
-- Со GitHub Actions рачно компајлира **три непотпишани** Android варијанти:
-  `release`, `signqa`, `signdebug`.
+- Со GitHub Actions рачно компајлира непотпишани APK кандидати `release`, `signqa`, `signdebug` и `internalBeta`, плус непотпишан `internalBeta` AAB.
 - Изворот мора да биде **веќе јавен commit во овој репозиториум**,
   избран од сопственикот со целосен SHA, не автоматски преземен од приватниот проект.
 - Ги тестира проверките за играта и Android build-от, ги проверува package IDs,

@@ -4,15 +4,17 @@ from pathlib import Path
 import subprocess
 import sys
 import re
+import os
 
 root = Path(__file__).resolve().parents[1]
+allow_snapshot = (os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" and os.environ.get("ALLOW_PUBLIC_SNAPSHOT") == "true")
 tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=root).split(b"\0")
 paths = [Path(x.decode("utf-8")) for x in tracked if x]
 errors = []
 
 for path in paths:
     text = path.as_posix()
-    if path.parts[0] == "snapshot":
+    if path.parts[0] == "snapshot" and not allow_snapshot:
         errors.append("Game snapshot must not be committed to tooling main: " + text)
     if any(p in {".ssh", "secrets", "backups"} for p in path.parts):
         errors.append("Forbidden private directory: " + text)

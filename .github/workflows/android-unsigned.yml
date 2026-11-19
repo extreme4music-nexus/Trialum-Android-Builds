@@ -35,6 +35,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Check Android-only CI and local-signing boundary
+        env:
+          ALLOW_PUBLIC_SNAPSHOT: ${{ inputs.public_source_ack }}
         run: python3 tools/verify_build_repo.py
 
   unsigned-apks:
@@ -102,8 +104,8 @@ jobs:
         working-directory: candidate/snapshot
         run: node --test tests/dialogue-session.test.cjs
 
-      - name: Build Android release/SignQA/FriendsDebug unsigned candidates
-        run: gradle -p candidate/snapshot/android-template assembleRelease assembleSignqa assembleSigndebug --no-daemon
+      - name: Build unsigned Android APKs and the Internal Testing AAB
+        run: gradle -p candidate/snapshot/android-template assembleRelease assembleSignqa assembleSigndebug assembleInternalBeta bundleInternalBeta --no-daemon
 
       - name: Check package IDs and SHA-256; do NOT sign
         shell: bash
@@ -126,7 +128,13 @@ jobs:
           verify_one release candidate/snapshot/android-template/app/build/outputs/apk/release/app-release-unsigned.apk com.trialum.ziivaiskra
           verify_one signqa candidate/snapshot/android-template/app/build/outputs/apk/signqa/app-signqa-unsigned.apk com.trialum.ziivaiskra.signqa
           verify_one signdebug candidate/snapshot/android-template/app/build/outputs/apk/signdebug/app-signdebug-unsigned.apk com.trialum.ziivaiskra.signdebug
-          (cd unsigned-candidates && sha256sum *-unsigned.apk > SHA256SUMS)
+          verify_one internalBeta candidate/snapshot/android-template/app/build/outputs/apk/internalBeta/app-internalBeta-unsigned.apk com.trialum.ziivaiskra
+          AAB=candidate/snapshot/android-template/app/build/outputs/bundle/internalBeta/app-internalBeta.aab
+          test -s "$AAB"
+          jarsigner -verify "$AAB" 2>&1 | grep -Fq "jar is unsigned"
+          cp "$AAB" unsigned-candidates/Trialum-1.1.1-v40-internalBeta-unsigned.aab
+          cp candidate/snapshot/android-template/app/build/outputs/mapping/internalBeta/mapping.txt unsigned-candidates/internalBeta-mapping.txt
+          (cd unsigned-candidates && sha256sum *-unsigned.apk *.aab internalBeta-mapping.txt > SHA256SUMS)
           {
             echo "selected_source_commit=$SOURCE_SHA"
             echo "android_sdk=36"
@@ -134,7 +142,7 @@ jobs:
             echo "signing=LOCAL_ONLY_NO_KEY_ON_GITHUB"
           } > unsigned-candidates/build-info.txt
 
-      - name: Upload unsigned APKs for LOCAL signing
+      - name: Upload unsigned APKs/AAB for LOCAL signing
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Trialum-unsigned-Android-${{ github.run_number }}

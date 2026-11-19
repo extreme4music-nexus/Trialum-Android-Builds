@@ -24,10 +24,11 @@ Only locally controlled `zipalign` / `apksigner` may sign official artifacts.
 
 ## Output
 
-The build produces candidate unsigned APK files for these application IDs:
+The build produces unsigned APK candidates for these application IDs and an unsigned Internal Testing AAB for the main package:
 - `com.trialum.ziivaiskra` — release candidate, UNSIGNED
 - `com.trialum.ziivaiskra.signqa` — signing QA candidate, UNSIGNED
 - `com.trialum.ziivaiskra.signdebug` — friends debug candidate, UNSIGNED
+- `com.trialum.ziivaiskra` — internal-beta APK and AAB, UNSIGNED; owner-local signing required
 
 These are NOT approved public releases. Check version, signing identity,
 backup/restore migration and install/update behavior on owner devices before
