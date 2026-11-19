@@ -1,0 +1,5 @@
+Source repository: https://github.com/extreme4music-nexus/trialum-beta
+Source branch: i18n/v40-complete-locales-20261119
+Source commit: e0429785e95d051d1d04bf191be799dbff74b5f5
+
+This is a clean, allowlisted build snapshot copied from a commit already visible in the public source repository. No Git history, private repository content, credentials, keystores, server files, model packs, or user data are included. Build/sign policy is documented at the root of Trialum-Android-Builds.
